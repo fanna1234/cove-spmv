@@ -3,7 +3,7 @@
 
 (a) survival curves of per-matrix speedup over cuSPARSE-double (value1000,
     RTX PRO 6000, all 8 baselines + COVE hybrid/joint);
-(b) total bytes/nnz decomposed into position+value streams (nnz-weighted);
+(b) position metadata bytes/nnz, including COVE work descriptors;
 (c) the value menu on the storage-accuracy plane (medians, common success set).
 
 Usage: plot_three_axes.py <repo_root> <out (no ext)>
@@ -16,7 +16,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import patches
 from paper_style import setup_style, save_fig
 import plot_eval_performance as pe
 
@@ -24,17 +23,22 @@ PBLUE, GREEN, DGREEN, CHAR = "#2c5f9e", "#76B900", "#538000", "#1c2128"
 
 
 def panel_speed(ax, root):
+    matrix_list = os.path.join(
+        root, "structural/matrix_lists/"
+        "suitesparse_auto_select_value1000_2026-06-07.txt")
     comb = pe.read_combined(os.path.join(
         root, "repro/baselines/results/blackwell/"
         "suitesparse_auto_select_value1000_2026-06-07/combined.csv"))
     cd = comb["cusparse_double"]
-    hyb = pe.read_core_summaries(os.path.join(
+    hyb = pe.read_core_speedups(os.path.join(
         root, "structural/results/studies/cove_core_value1000_2026-06-09/"
-        "shard*.summary.csv"), "hybrid_lb")
+        "shard*.csv"), matrix_list, "hybrid_lb")
     joint = pe.read_joint(os.path.join(
-        root, "structural/results/studies/cove_joint_value1000_2026-06-09/*.csv"))
+        root, "structural/results/studies/cove_joint_value1000_2026-06-09/*.csv"),
+        matrix_list)
     csr5 = pe.read_csr5(os.path.join(
-        root, "structural/results/studies/csr5_value1000_2026-06-09/shard*.csv"))
+        root, "structural/results/studies/csr5_value1000_2026-06-09/shard*.csv"),
+        matrix_list)
     for key, label, color, ls in pe.BASELINES:
         x, y = pe.survival([cd[m] / v for m, v in comb[key].items() if m in cd])
         ax.step(x, y, where="post", color=color, ls=ls, lw=0.9, label=label)
@@ -53,6 +57,9 @@ def panel_speed(ax, root):
     ax.set_ylim(0, 1.0)
     ax.set_xlabel("speedup over cuSPARSE-double", fontsize=6.2)
     ax.set_ylabel("fraction of matrices $\\geq x$", fontsize=6.2)
+    ax.text(0.98, 0.97, "COVE: minima\nexternals: native stats",
+            transform=ax.transAxes, ha="right", va="top", fontsize=4.7,
+            color="0.35")
     ax.tick_params(labelsize=5.4)
     ax.legend(fontsize=4.8, loc="lower left", framealpha=0.9,
               handlelength=1.6, labelspacing=0.32, borderpad=0.4)
@@ -60,63 +67,54 @@ def panel_speed(ax, root):
 
 
 def panel_memory(ax, root):
-    tot_pos = tot_idx = tot_nnz = 0
+    packed_bytes = work_bytes = csr_bytes = total_nnz = 0.0
+    matrix_count = 0
     for p in glob.glob(os.path.join(
             root, "structural/results/studies/cove_core_value1000_2026-06-09/shard*.csv")):
+        if ".summary." in os.path.basename(p):
+            continue
         for row in csv.DictReader(open(p, newline="")):
-            if row.get("operator_name") != "original_lb" or row.get("status") != "ok":
+            if (row.get("requested_operator") != "original_lb"
+                    or row.get("operator_name") != "original_lb"
+                    or row.get("status") != "ok"):
                 continue
             try:
                 nnz = int(row["nnz"]); rows = int(row["rows"])
-                pb = float(row["position_payload_bytes"])
+                packed = float(row["position_payload_bytes"])
+                work_items = int(row["work_items"])
             except (ValueError, KeyError):
                 continue
-            if nnz <= 0 or pb <= 0:
+            if nnz <= 0 or packed <= 0:
                 continue
-            tot_pos += pb; tot_idx += 4.0 * nnz + 4.0 * (rows + 1); tot_nnz += nnz
-    vj = vn = 0
-    for p in glob.glob(os.path.join(
-            root, "structural/results/studies/cove_joint_value1000_2026-06-09/*.csv")):
-        for row in csv.DictReader(open(p, newline="")):
-            if row.get("codec") == "bfp8" and row.get("status") == "ok":
-                try:
-                    nnz = int(row["nnz"]); b = float(row["bytes_per_nnz"])
-                except ValueError:
-                    continue
-                vj += b * nnz; vn += nnz
-    pos_cove, pos_csr, val_joint = tot_pos / tot_nnz, tot_idx / tot_nnz, vj / vn
-    bars = [("CSR FP64", pos_csr, 8.0), ("CSR FP32", pos_csr, 4.0),
-            ("COVE struct.-only", pos_cove, 8.0),
-            ("COVE joint", pos_cove, val_joint)]
-    base = pos_csr + 8.0
-    ax.set_xlim(0, 16.4)
-    ax.set_ylim(-1.5, 3.6)
-    for sp in ax.spines.values():
-        sp.set_visible(False)
-    ax.set_yticks(range(4))
-    ax.set_yticklabels([b[0] for b in bars], fontsize=5.6)
-    ax.invert_yaxis()
-    ax.tick_params(left=False, labelsize=5.4)
-    ax.set_xlabel("total bytes / nnz (nnz-weighted)", fontsize=6.2)
-    for i, (name, pb, vb) in enumerate(bars):
-        ax.barh(i, pb, color=PBLUE, height=0.62, edgecolor="white", lw=0.5)
-        ax.barh(i, vb, left=pb, color=GREEN, height=0.62, edgecolor="white", lw=0.5)
-        if pb > 1.8:
-            ax.text(pb / 2, i, f"{pb:.1f}", ha="center", va="center",
-                    fontsize=5.4, color="white", fontweight="bold")
-        if vb > 1.4:
-            ax.text(pb + vb / 2, i, f"{vb:.1f}", ha="center", va="center",
-                    fontsize=5.4, color=CHAR, fontweight="bold")
-        ratio = base / (pb + vb)
-        tag = "1.0$\\times$" if abs(ratio - 1) < 1e-9 else f"{ratio:.1f}$\\times$"
-        ax.text(pb + vb + 0.3, i, tag, ha="left", va="center", fontsize=5.8,
-                color=DGREEN if ratio > 2 else "0.35",
-                fontweight="bold" if ratio > 2 else "normal")
-    ax.add_patch(patches.Rectangle((4.4, -1.22), 0.5, 0.4, color=PBLUE))
-    ax.text(5.1, -1.02, "position", fontsize=5.6, va="center")
-    ax.add_patch(patches.Rectangle((8.6, -1.22), 0.5, 0.4, color=GREEN))
-    ax.text(9.3, -1.02, "value", fontsize=5.6, va="center")
-    ax.set_title("(b) memory (value1000)", fontsize=7)
+            packed_bytes += packed
+            work_bytes += 16.0 * work_items
+            csr_bytes += 4.0 * nnz + 4.0 * (rows + 1)
+            total_nnz += nnz
+            matrix_count += 1
+    packed_bpn = packed_bytes / total_nnz
+    work_bpn = work_bytes / total_nnz
+    cove_bpn = packed_bpn + work_bpn
+    csr_bpn = csr_bytes / total_nnz
+    ax.barh([0], [packed_bpn], color=PBLUE, height=0.55,
+            edgecolor=CHAR, linewidth=0.35)
+    ax.barh([0], [work_bpn], left=[packed_bpn], color="#f3b37a",
+            height=0.55, hatch="..", edgecolor=CHAR, linewidth=0.35)
+    ax.barh([1], [csr_bpn], color="#d9dde2", height=0.55,
+            hatch="//", edgecolor=CHAR, linewidth=0.45)
+    ax.text(packed_bpn / 2, 0, f"words {packed_bpn:.2f}", ha="center",
+            va="center", fontsize=5.4, color="white", fontweight="bold")
+    ax.text(cove_bpn + 0.08, 0, f"+ work = {cove_bpn:.2f}", ha="left",
+            va="center", fontsize=5.4, color=CHAR)
+    ax.text(csr_bpn / 2, 1, f"row + column = {csr_bpn:.2f}", ha="center",
+            va="center", fontsize=5.4, color=CHAR)
+    ax.set_yticks([0, 1], ["COVE", "CSR"])
+    ax.set_xlim(0, 5.2)
+    ax.set_ylim(-0.55, 1.55)
+    ax.set_xlabel("position bytes / nnz", fontsize=6.2)
+    ax.tick_params(axis="y", length=0, labelsize=5.6)
+    for sp in ("top", "right", "left"):
+        ax.spines[sp].set_visible(False)
+    ax.set_title(f"(b) position metadata (n={matrix_count})", fontsize=7)
 
 
 CODECS = {
@@ -131,11 +129,18 @@ CODECS = {
 
 def panel_accuracy(ax, root):
     data = {k: {} for k in CODECS}
+    all_keys = set()
     for p in glob.glob(os.path.join(
             root, "structural/results/studies/cove_core_value1000_2026-06-09/shard*.csv")):
+        if ".summary." in os.path.basename(p):
+            continue
         for row in csv.DictReader(open(p, newline="")):
+            key = (row.get("matrix", ""), row.get("matrix_bytes", ""))
+            if key[0] and key[1]:
+                all_keys.add(key)
             op = row.get("operator_name")
-            if op not in CODECS or row.get("status") != "ok":
+            if (op not in CODECS or row.get("requested_operator") != op
+                    or row.get("status") != "ok"):
                 continue
             try:
                 b = float(row["value_bytes_per_nnz"])
@@ -144,10 +149,10 @@ def panel_accuracy(ax, root):
                 continue
             if b <= 0 or e < 0:
                 continue
-            data[op][row["matrix"]] = (b, max(e, 1e-17))
+            data[op][key] = (b, max(e, 1e-17))
     family = ["original_lb", "bf16_lb", "bfp8_lb", "bfp8_outlier_lb"]
     common = set.intersection(*(set(data[f]) for f in family))
-    total = len(set(data["original_lb"]))
+    total = len(all_keys)
     for op, (label, color, marker, off) in CODECS.items():
         rows = data[op]
         keys = common if op in family else set(rows)

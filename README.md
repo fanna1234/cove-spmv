@@ -40,7 +40,8 @@ repro/
 
 SuiteSparse matrices and third-party baseline source trees are not
 redistributed. The repository contains download lists, port instructions, and
-the measured CSV evidence needed by the plotting scripts.
+the measured CSV evidence needed by the plotting scripts. See
+[`repro/THIRD_PARTY.md`](repro/THIRD_PARTY.md) for source and license boundaries.
 
 ## Requirements
 
@@ -104,7 +105,7 @@ same directory.
 | Evidence view | Script | Primary inputs |
 |---|---|---|
 | value-domain census | `plot_value_census.py` | le10gib core shards |
-| speed, storage, and accuracy | `plot_three_axes.py` | value1000 core/joint/CSR5/baseline CSVs |
+| speed, position metadata, and accuracy | `plot_three_axes.py` | value1000 core/joint/CSR5/baseline CSVs |
 | coverage and scale | `plot_eval_performance.py` | le10gib and cross-device CSVs |
 | value-codec Pareto frontier | `plot_value_pareto.py` | value1000 core shards |
 | conjugate-gradient behavior | `plot_cg_solver.py` | `cg_real_spd_2026-06-09.csv` |
@@ -119,9 +120,11 @@ python3 structural/scripts/plot_three_axes.py . output/three_axes
 ## Evidence and claim boundaries
 
 - The le10gib inventory contains 3,624 real-valued SuiteSparse matrices that
-  were testable within the paper's size contract. Eleven pairs share a file
-  basename across different SuiteSparse groups, so raw-shard analysis keys each
-  entry by both basename and file size rather than collapsing them to 3,613.
+  were testable within the paper's size contract; value1000 contains 1,000
+  matrix paths. Eleven le10gib pairs and five value1000 pairs share a basename
+  across SuiteSparse groups. Public plotting code reconstructs full identities
+  from the frozen list and shard order instead of collapsing them to 3,613 and
+  995 names.
 - value1000 is the frozen main comparison denominator; success sets and route
   coverage are recorded in the CSVs rather than silently imputed.
 - Primary timings were collected on an NVIDIA RTX PRO 6000 Blackwell GPU.
@@ -129,6 +132,10 @@ python3 structural/scripts/plot_three_axes.py . output/three_axes
   cross-device CSVs.
 - Included CSVs are measured evidence from June 2026. Re-running on a different
   GPU, CUDA version, clock state, or matrix cache may produce different timing.
+- COVE/cuSPARSE curves use paired minimum post-warmup times. External baseline
+  CSVs retain each implementation's native statistic; CSR5 reports its native
+  1,000-run average. Those curves are compatibility context, not a uniform-
+  statistic ranking.
 - Build success, host tests, and figure regeneration do not by themselves prove
   end-to-end performance on an unmeasured system.
 

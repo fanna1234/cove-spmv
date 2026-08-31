@@ -4,7 +4,6 @@ import csv
 import json
 import os
 import re
-import socket
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -505,6 +504,9 @@ def main():
     parser.add_argument("--spaden-root", default="repro/spaden/src/Spaden-ICPP24-main")
     args = parser.parse_args()
 
+    requested_data_dir = args.data_dir
+    requested_matrix_list = args.matrix_list
+
     repo_root = Path(args.repo_root).resolve()
     args.repo_root = str(repo_root)
     args.data_dir = str((repo_root / args.data_dir).resolve())
@@ -532,12 +534,15 @@ def main():
     shards = balance_shards(matrices, len(gpus))
 
     manifest = {
+        "schema": "cove_external_baseline_manifest_v1",
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "hostname": socket.gethostname(),
-        "repo_root": args.repo_root,
-        "data_dir": args.data_dir,
-        "matrix_list": args.matrix_list,
-        "out_dir": args.out_dir,
+        "data_dir": (requested_data_dir
+                     if not Path(requested_data_dir).is_absolute()
+                     else "${DATA_ROOT}"),
+        "matrix_list": (requested_matrix_list
+                         if not Path(requested_matrix_list).is_absolute()
+                         else "${MATRIX_LIST}"),
+        "third_party_revisions": "see repro/THIRD_PARTY.md",
         "baselines": baselines,
         "gpus": gpus,
         "warmup": args.warmup,

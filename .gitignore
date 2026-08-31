@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 
 data/
+data_all/
+data_canonical25/
 output/
 structural/build/
 structural/build-*/
@@ -13,3 +15,11 @@ Testing/
 cmake_install.cmake
 CTestTestfile.cmake
 Makefile.cmake
+
+# Third-party source trees are fetched under their own licenses.
+repro/*/src/
+
+# Rerun manifests/logs can contain local paths and host information.
+repro/baselines/results/**/manifest.json
+repro/baselines/results/**/logs/
+repro/baselines/results/**/shards/

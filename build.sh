@@ -56,9 +56,9 @@ if [ -n "${NVCC:-}" ] && [ -x "$NVCC" ]; then
     gpu struct_gpu_spmv            structural/src/main_gpu_spmv.cu            -lcusparse  # family runner: BitBSR-LB + value codecs + cuSPARSE baseline
     gpu struct_gpu_convert         structural/src/main_gpu_convert.cu         -lcusparse  # format-conversion tool
     # ---- evaluation harnesses (cited evidence) ----
-    gpu bench_accuracy_robust      structural/src/bench_accuracy_robust.cu    -lcusparse            # value-axis accuracy (synthesis §13)
+    gpu bench_accuracy_robust      structural/src/bench_accuracy_robust.cu    -lcusparse            # multi-input value-axis accuracy
     gpu bench_cg_solve             structural/src/bench_cg_solve.cu           -lcusparse -lcublas   # iterative-solver (CG / IR / FCG) study
-    gpu check_outlier_globalnorm   structural/src/check_outlier_globalnorm.cu -lcusparse            # global-norm output-error metric (§12)
+    gpu check_outlier_globalnorm   structural/src/check_outlier_globalnorm.cu -lcusparse            # global-norm output-error probe
 else
     echo "  (no nvcc found -> skipping GPU binaries)"
 fi

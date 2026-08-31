@@ -2,9 +2,10 @@
 """Run the ported CSR5 baseline (bhSPARSE Benchmark_SpMV_using_CSR5, double) over a
 matrix list and record per-matrix CSR5 conversion + SpMV time, for the head-to-head.
 
-CSR5 is the load-balance standard. We do NOT claim to beat it (spec section 6); this run
-quantifies where CSR5 wins (irregular matrices) vs where COVE wins (large/dense).
-Schema is self-contained so it can be merged with the 7-config baseline table.
+CSR5 is a load-balancing baseline. The runner preserves CSR5's native timing
+statistic and correctness output; cross-method comparisons must disclose that
+statistic rather than treating it as identical to COVE's paired-minimum timing.
+The schema is self-contained for baseline-table integration.
 """
 import argparse
 import csv
@@ -40,7 +41,8 @@ def main():
         names = names[:a.limit]
     names = names[a.shard::a.nshards]
 
-    cols = ["matrix", "nnz", "csr5_convert_ms", "csr5_spmv_ms", "csr5_gflops",
+    cols = ["matrix_id", "matrix", "matrix_bytes", "nnz", "csr5_convert_ms",
+            "csr5_spmv_ms", "csr5_gflops",
             "csr5_bandwidth", "check", "status"]
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -51,7 +53,7 @@ def main():
         for i, name in enumerate(names):
             m = data / name
             base = Path(name).name
-            row = {"matrix": base, "status": "missing"}
+            row = {"matrix_id": name, "matrix": base, "status": "missing"}
             if m.exists():
                 try:
                     p = subprocess.run([a.bin, str(m)], text=True,
@@ -62,7 +64,9 @@ def main():
                         return mm.group(1) if mm else ""
                     spmv = g(RE_SPMV)
                     row = {
+                        "matrix_id": name,
                         "matrix": base,
+                        "matrix_bytes": m.stat().st_size,
                         "nnz": g(RE_NNZ),
                         "csr5_convert_ms": g(RE_CONV),
                         "csr5_spmv_ms": spmv,
@@ -73,7 +77,9 @@ def main():
                         "status": "ok" if (p.returncode == 0 and spmv) else f"fail:{p.returncode}",
                     }
                 except subprocess.TimeoutExpired:
-                    row = {"matrix": base, "status": "timeout"}
+                    row = {"matrix_id": name, "matrix": base,
+                           "matrix_bytes": m.stat().st_size,
+                           "status": "timeout"}
             w.writerow(row)
             f.flush()
             if (i + 1) % 25 == 0:

@@ -1,13 +1,14 @@
 # CSR5 baseline — port to modern CUDA (sm_80 / sm_90a / sm_120a)
 
 bhSPARSE CSR5 (2015, CUDA 6.5) used as the load-balance baseline. The third-party
-source (`CSR5_cuda/`) is git-ignored (re-clonable); this file + `patch_csr5.py` +
-`helper_cuda.h` are the reproducible delta.
+source belongs under the git-ignored `repro/csr5/src/` directory; this file,
+`patch_csr5.py`, and `helper_cuda.h` are the distributed compatibility delta.
 
 ## Recipe
 ```bash
-git clone --depth 1 https://github.com/weifengliu-ssslab/Benchmark_SpMV_using_CSR5.git
-cd Benchmark_SpMV_using_CSR5/CSR5_cuda
+git clone https://github.com/weifengliu-ssslab/Benchmark_SpMV_using_CSR5.git repro/csr5/src/Benchmark_SpMV_using_CSR5
+git -C repro/csr5/src/Benchmark_SpMV_using_CSR5 checkout 4b06ce35e45c3c61a51e249e12e1c4954af443fa
+cd repro/csr5/src/Benchmark_SpMV_using_CSR5/CSR5_cuda
 cp <repo>/repro/csr5/helper_cuda.h .          # 1-symbol stub (checkCudaErrors); replaces CUDA-samples dep
 : > helper_functions.h                          # CSR5 includes it but only uses checkCudaErrors
 python3 <repo>/repro/csr5/patch_csr5.py         # guard double __shfl_*/atomicAdd polyfills (now native)
@@ -33,7 +34,10 @@ ARCH=sm_120a; COMPUTE=compute_${ARCH#sm_}
 `structural/scripts/run_csr5_sweep.py --bin <.../CSR5_cuda/spmv> --data-dir <suitesparse store>
 --matrix-list <list.txt> --out csr5_<set>.csv` (stride-shardable).
 
-## Result (2026-06-10, value1000): COVE beats CSR5 on the shared denominator
-hybrid(fp64) 2.54x, joint(bfp8) 2.90x over CSR5 (faster on 99/100%); CSR5 1000/1000 PASS.
-value1000 is small/medium-dominated, where CSR5's tile overhead does not amortize; CSR5's
-irregular-giant regime was not tested. We do not claim COVE is the fastest SpMV.
+## Recorded result boundary
+
+The frozen value1000 CSV contains 1,000 successful CSR5 calls. Under CSR5's
+native 1,000-run aggregate and COVE's separately disclosed timing contract, the
+paper reports 2.54x for the lossless hybrid on their shared success set. This is
+not a uniform-statistic claim that COVE is the fastest SpMV: value1000 is
+small/medium dominated, and CSR5's irregular-giant regime was not tested.

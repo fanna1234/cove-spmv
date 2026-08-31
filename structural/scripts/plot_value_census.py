@@ -18,8 +18,8 @@ from matplotlib import patches
 from paper_style import setup_style, save_fig
 
 SEGS = [  # (label, upper bound, color)
-    ("constant\n(implicit)", 1, "#76B900"),
-    ("binary", 2, "#9fce4e"),
+    ("constant\n(implicit/scalar)", 1, "#76B900"),
+    ("2-value\n(1-bit exact)", 2, "#9fce4e"),
     ("$\\leq$16", 16, "#cde39b"),
     ("$\\leq$256", 256, "#b9cfe9"),
     ("$\\leq$65536", 65536, "#7da7d9"),
@@ -91,11 +91,15 @@ def main(shard_dir, out):
         ax.text((x0 + x1) / 2, y + 0.045, text, ha="center", va="bottom",
                 fontsize=6.0, color=color)
 
-    c45 = 100.0 * (counts[0] + counts[1]) / n
-    c91 = 100.0 * sum(counts[:5]) / n
-    bracket(0, c45, 0.80, "no value array needed: 45%", "#538000")
-    bracket(c45 + 1.5, c91, 0.80, "exact, 1–16-bit code: +45%", "#2c5f9e")
-    bracket(c91 + 1.5, 100, 0.80, "9%", "#8c1515")
+    first = 100.0 * (counts[0] + counts[1]) / n
+    exact = 100.0 * sum(counts[2:5]) / n
+    exact_end = first + exact
+    bracket(0, first, 0.80,
+            f"implicit/scalar + 1-bit exact: {first:.0f}%", "#538000")
+    bracket(first + 1.5, exact_end, 0.80,
+            f"2–16-bit exact: {exact:.0f}%", "#2c5f9e")
+    bracket(exact_end + 1.5, 100, 0.80,
+            f"wide: {100.0 - exact_end:.0f}%", "#8c1515")
     save_fig(fig, out)
 
 

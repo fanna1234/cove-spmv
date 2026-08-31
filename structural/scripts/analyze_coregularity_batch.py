@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Co-regularity PREVALENCE sweep over a SuiteSparse denominator (parallel).
 
-Scales the §12 null-controlled co-regularity metric from canonical25 to a full
+Scales the null-controlled co-regularity metric from canonical25 to a full
 paper denominator, to show co-regularity is a prevalent, predictable property
 (not cherry-picked) and to produce the headline taxonomy figure (fill ×
 value-coherence).

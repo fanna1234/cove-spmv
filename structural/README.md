@@ -93,9 +93,11 @@ Tracked denominators include:
   cuSPARSE-testable inventory.
 
 The le10gib set contains eleven same-basename pairs from different SuiteSparse
-groups. Raw result consumers must use `(matrix, matrix_bytes)` or the original
-full path as the identity; basename-only aggregation collapses the denominator
-from 3,624 to 3,613.
+groups; value1000 contains five. Raw result consumers must use
+`(matrix, matrix_bytes)` or the original full path as the identity.
+`plot_eval_performance.py` reconstructs legacy sharded CSV identities from the
+frozen matrix-list order. Newly generated joint and CSR5 CSVs also record
+`matrix_id` and `matrix_bytes` directly.
 
 ## Sweep and analysis scripts
 

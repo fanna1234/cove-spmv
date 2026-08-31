@@ -10,6 +10,8 @@ E1 (value1000, RTX PRO 6000): speedup-over-cuSPARSE-double survival curves
       - COVE joint: hybrid speedup x joint_vs_hybrid (bfp8, gate-pass only;
         gate-fail matrices stay on the hybrid = the dispatch semantics)
       - CSR5: csr5_value1000 shards (csr5_spmv_ms) / cusparse_double ms
+    COVE curves use paired post-warmup minima; external curves retain each
+    implementation's native statistic and are labeled as such in the plot.
 
 E2 (le10gib, RTX PRO 6000): scale scatter.
     (a) hybrid-vs-cuSPARSE speedup vs nnz (coverage, 3624 matrices)
@@ -21,6 +23,7 @@ import csv
 import glob
 import math
 import os
+import re
 import sys
 from collections import defaultdict
 
@@ -42,8 +45,54 @@ def base(name):
     return os.path.basename(name)
 
 
+def iter_sharded_rows(pattern, matrix_list):
+    """Yield ``(full_matrix_id, row)`` for fixed-stride shard CSVs.
+
+    Legacy COVE, joint, and CSR5 result CSVs stored only the basename. The
+    frozen matrix list and shard order recover the original Group/Entry path,
+    including same-basename matrices that must remain distinct.
+    """
+    paths = [p for p in glob.glob(pattern) if ".summary." not in base(p)]
+    indexed = []
+    for path in paths:
+        match = re.search(r"shard(\d+)\.csv$", base(path))
+        if match:
+            indexed.append((int(match.group(1)), path))
+    if not indexed:
+        return
+    indexed.sort()
+    nshards = len(indexed)
+    names = [line.strip() for line in open(matrix_list)
+             if line.strip() and not line.startswith("#")]
+    for _, path in indexed:
+        with open(path, newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        candidates = []
+        for offset in range(nshards):
+            expected = names[offset::nshards]
+            if not expected or len(rows) % len(expected) != 0:
+                continue
+            rows_per_matrix = len(rows) // len(expected)
+            if all(
+                base(rows[index * rows_per_matrix].get("matrix", ""))
+                == base(matrix_id)
+                for index, matrix_id in enumerate(expected)
+            ):
+                candidates.append((expected, rows_per_matrix))
+        if len(candidates) != 1:
+            raise ValueError(f"{path}: cannot infer one matrix-list shard offset")
+        expected, rows_per_matrix = candidates[0]
+        for index, matrix_id in enumerate(expected):
+            chunk = rows[index * rows_per_matrix:(index + 1) * rows_per_matrix]
+            expected_base = base(matrix_id)
+            if any(base(row.get("matrix", "")) != expected_base for row in chunk):
+                raise ValueError(f"{path}: shard order mismatch at {matrix_id}")
+            for row in chunk:
+                yield matrix_id, row
+
+
 def read_combined(path):
-    ms = defaultdict(dict)  # baseline -> matrix(base) -> spmv_ms
+    ms = defaultdict(dict)  # baseline -> full Group/Entry/file.mtx -> spmv_ms
     with open(path, newline="") as f:
         for row in csv.DictReader(f):
             if row["status"] != "ok":
@@ -53,77 +102,70 @@ def read_combined(path):
             except (ValueError, TypeError):
                 continue
             if v > 0:
-                ms[row["baseline"]][base(row["matrix"])] = v
+                ms[row["baseline"]][row["matrix"]] = v
     return ms
 
 
-def read_core_summaries(pattern, operator):
-    """matrix(base) -> (speedup_vs_cusparse) for one operator."""
-    out = {}
-    for path in glob.glob(pattern):
-        with open(path, newline="") as f:
-            for row in csv.DictReader(f):
-                if row["operator_name"] != operator or row["status"] != "ok":
-                    continue
-                try:
-                    out[base(row["matrix"])] = float(row["speedup_vs_cusparse"])
-                except (ValueError, TypeError):
-                    continue
-    return out
-
-
-def read_joint(pattern, codec="bfp8"):
-    """matrix(base) -> (joint_vs_hybrid, pass, nnz)."""
-    out = {}
-    for path in glob.glob(pattern):
-        with open(path, newline="") as f:
-            for row in csv.DictReader(f):
-                if row.get("codec") != codec or row.get("status") != "ok":
-                    continue
-                try:
-                    out[base(row["matrix"])] = (float(row["joint_speedup_vs_hybrid"]),
-                                                row.get("pass_1e-2") == "1",
-                                                int(row["nnz"]))
-                except (ValueError, TypeError):
-                    continue
-    return out
-
-
-def read_csr5(pattern):
-    out = {}
-    for path in glob.glob(pattern):
-        with open(path, newline="") as f:
-            for row in csv.DictReader(f):
-                if row.get("status") != "ok" or row.get("check") != "PASS":
-                    continue
-                try:
-                    out[base(row["matrix"])] = float(row["csr5_spmv_ms"])
-                except (ValueError, TypeError):
-                    continue
-    return out
-
-
-def read_core_full(pattern):
-    """From raw shards: (matrix name, file bytes) -> operator measurements.
-
-    The le10gib denominator contains 11 same-basename pairs from different
-    SuiteSparse groups. Including ``matrix_bytes`` preserves all 3,624 entries
-    instead of silently collapsing them to 3,613 names.
-    """
-    out = defaultdict(dict)
-    for path in glob.glob(pattern):
-        if ".summary." in os.path.basename(path):
+def read_core_speedups(pattern, matrix_list, operator):
+    """Return same-row cuSPARSE/operator speedups keyed by full matrix ID."""
+    by_matrix = defaultdict(dict)
+    for matrix_id, row in iter_sharded_rows(pattern, matrix_list):
+        if row.get("status") != "ok":
             continue
-        with open(path, newline="") as f:
-            for row in csv.DictReader(f):
-                if row.get("status") != "ok":
-                    continue
-                try:
-                    key = (base(row["matrix"]), row["matrix_bytes"])
-                    out[key][row["operator_name"]] = float(row["min_ms"])
-                    out[key]["nnz"] = int(row["nnz"])
-                except (ValueError, TypeError, KeyError):
-                    continue
+        op = row.get("operator_name")
+        requested = row.get("requested_operator")
+        if not ((op == operator and requested == operator)
+                or (op == "cusparse_csr" and requested == "cusparse_default")):
+            continue
+        try:
+            by_matrix[matrix_id][op] = float(row["min_ms"])
+        except (ValueError, TypeError, KeyError):
+            continue
+    out = {}
+    for matrix_id, values in by_matrix.items():
+        if values.get(operator, 0) > 0 and "cusparse_csr" in values:
+            out[matrix_id] = values["cusparse_csr"] / values[operator]
+    return out
+
+
+def read_joint(pattern, matrix_list, codec="bfp8"):
+    """Full matrix ID -> (joint_vs_hybrid, pass, nnz)."""
+    out = {}
+    for matrix_id, row in iter_sharded_rows(pattern, matrix_list):
+        if row.get("codec") != codec or row.get("status") != "ok":
+            continue
+        try:
+            out[matrix_id] = (float(row["joint_speedup_vs_hybrid"]),
+                              row.get("pass_1e-2") == "1",
+                              int(row["nnz"]))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def read_csr5(pattern, matrix_list):
+    out = {}
+    for matrix_id, row in iter_sharded_rows(pattern, matrix_list):
+        if row.get("status") != "ok" or row.get("check") != "PASS":
+            continue
+        try:
+            out[matrix_id] = float(row["csr5_spmv_ms"])
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def read_core_full(pattern, matrix_list):
+    """Return raw operator measurements keyed by full matrix-list identity."""
+    out = defaultdict(dict)
+    for matrix_id, row in iter_sharded_rows(pattern, matrix_list):
+        if row.get("status") != "ok":
+            continue
+        try:
+            out[matrix_id][row["operator_name"]] = float(row["min_ms"])
+            out[matrix_id]["nnz"] = int(row["nnz"])
+        except (ValueError, TypeError, KeyError):
+            continue
     return out
 
 
@@ -134,17 +176,22 @@ def survival(vals):
 
 
 def fig_e1(root, outdir):
+    matrix_list = os.path.join(
+        root, "structural/matrix_lists/"
+        "suitesparse_auto_select_value1000_2026-06-07.txt")
     comb = read_combined(os.path.join(
         root, "repro/baselines/results/blackwell/"
         "suitesparse_auto_select_value1000_2026-06-07/combined.csv"))
     cd = comb["cusparse_double"]
-    hyb = read_core_summaries(os.path.join(
+    hyb = read_core_speedups(os.path.join(
         root, "structural/results/studies/cove_core_value1000_2026-06-09/"
-        "shard*.summary.csv"), "hybrid_lb")
+        "shard*.csv"), matrix_list, "hybrid_lb")
     joint = read_joint(os.path.join(
-        root, "structural/results/studies/cove_joint_value1000_2026-06-09/*.csv"))
+        root, "structural/results/studies/cove_joint_value1000_2026-06-09/*.csv"),
+        matrix_list)
     csr5 = read_csr5(os.path.join(
-        root, "structural/results/studies/csr5_value1000_2026-06-09/shard*.csv"))
+        root, "structural/results/studies/csr5_value1000_2026-06-09/shard*.csv"),
+        matrix_list)
 
     fig, ax = plt.subplots(figsize=(3.25, 2.1))
     n_report = {}
@@ -179,6 +226,9 @@ def fig_e1(root, outdir):
     ax.set_ylim(0, 1.0)
     ax.set_xlabel("speedup over cuSPARSE-double (RTX PRO 6000)")
     ax.set_ylabel("fraction of matrices $\\geq x$")
+    ax.text(0.98, 0.97, "COVE: paired minima\nexternals: native statistics",
+            transform=ax.transAxes, ha="right", va="top", fontsize=5.3,
+            color="0.35")
     ax.legend(fontsize=5.6, loc="lower left", framealpha=0.9, ncol=1)
     save_fig(fig, os.path.join(outdir, "eval_value1000_profile"))
     print("E1 counts:", n_report)
@@ -187,10 +237,15 @@ def fig_e1(root, outdir):
 def fig_e2(root, outdir):
     # (a)(b) scale panels + (c) cross-device stacking
 
+    matrix_list = os.path.join(
+        root, "structural/matrix_lists/"
+        "suitesparse_real_paper_le10gib_2026-06-07.txt")
     core = read_core_full(os.path.join(
-        root, "structural/results/studies/cove_core_le10gib_2026-06-09/shard*.csv"))
+        root, "structural/results/studies/cove_core_le10gib_2026-06-09/shard*.csv"),
+        matrix_list)
     joint = read_joint(os.path.join(
-        root, "structural/results/studies/cove_joint_le10gib_2026-06-09/*.csv"))
+        root, "structural/results/studies/cove_joint_le10gib_2026-06-09/*.csv"),
+        matrix_list)
 
     nnz_h, sp_h = [], []
     for m, d in core.items():
@@ -277,8 +332,10 @@ def fig_e2(root, outdir):
     for name, label, off in [("Queen_4147.mtx", "Queen_4147", (-3, 5)),
                              ("nlpkkt240.mtx", "nlpkkt240", (-3, -10)),
                              ("indochina-2004.mtx", "indochina", (-3, 5))]:
-        if name in joint:
-            s, ok, nz = joint[name]
+        match = next((value for key, value in joint.items()
+                      if base(key) == name), None)
+        if match:
+            s, ok, nz = match
             ax.annotate(label, (nz, s), fontsize=5.5, xytext=off,
                         textcoords="offset points", ha="right")
     save_fig(fig, os.path.join(outdir, "eval_le10gib_scale"))

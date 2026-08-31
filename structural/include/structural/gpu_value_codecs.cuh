@@ -348,7 +348,7 @@ struct Bfp8OutlierBlkScaleValueCodec {
                    (sizeof(std::int32_t) + sizeof(std::int32_t) + sizeof(T));
     }
 
-    // Synthesis-§6 storage claim: positions come free from the bitmap, so only
+    // Value-only accounting: positions come from the bitmap, so only
     // the exact outlier VALUES count as extra storage over plain BFP8.
     std::size_t value_only_payload_bytes() const {
         return int8_values.size() * sizeof(signed char) +

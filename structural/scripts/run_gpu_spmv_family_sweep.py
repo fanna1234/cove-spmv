@@ -145,7 +145,9 @@ TIMING_PRESETS = {
 }
 TIMING_RE = re.compile(r"([^=,\s]+)=([^,]+)")
 SUMMARY_FIELDS = (
+    "matrix_id",
     "matrix",
+    "matrix_bytes",
     "requested_operator",
     "operator_name",
     "operator_family",
@@ -170,6 +172,7 @@ SUMMARY_FIELDS = (
     "verify_cpu",
 )
 RESULT_FIELDS = (
+    "matrix_id",
     "matrix",
     "matrix_bytes",
     "operator_name",
@@ -399,6 +402,7 @@ def run_one(args, matrix, operator):
     elapsed = time.time() - started
     parsed = parse_key_values(proc.stdout)
     row = {
+        "matrix_id": str(matrix.relative_to(args.data_dir)),
         "matrix": matrix.name,
         "matrix_bytes": str(matrix.stat().st_size),
         "operator_name": parsed.get("operator_name", operator.name),
@@ -513,12 +517,15 @@ def classify_claim_status(row, original_lb):
 def write_summary(rows, out_path):
     by_matrix = {}
     for row in rows:
-        by_matrix.setdefault(row["matrix"], {})[row["requested_operator"]] = row
+        matrix_id = row.get("matrix_id") or row["matrix"]
+        by_matrix.setdefault(matrix_id, {})[row["requested_operator"]] = row
 
-    def write_summary_row(writer, matrix, row, cusparse, original_lb, original_nolb):
+    def write_summary_row(writer, matrix_id, row, cusparse, original_lb, original_nolb):
         writer.writerow(
             {
-                "matrix": matrix,
+                "matrix_id": matrix_id,
+                "matrix": row["matrix"],
+                "matrix_bytes": row.get("matrix_bytes", ""),
                 "requested_operator": row["requested_operator"],
                 "operator_name": row["operator_name"],
                 "operator_family": row["operator_family"],
@@ -549,8 +556,8 @@ def write_summary(rows, out_path):
     with out_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=SUMMARY_FIELDS, lineterminator="\n")
         writer.writeheader()
-        for matrix in sorted(by_matrix):
-            item = by_matrix[matrix]
+        for matrix_id in sorted(by_matrix):
+            item = by_matrix[matrix_id]
             cusparse = item.get("cusparse_default")
             original_lb = item.get("original_lb")
             original_nolb = item.get("original_nolb")
@@ -558,7 +565,8 @@ def write_summary(rows, out_path):
                 row = item.get(operator.name)
                 if row is None:
                     continue
-                write_summary_row(writer, matrix, row, cusparse, original_lb, original_nolb)
+                write_summary_row(writer, matrix_id, row, cusparse,
+                                  original_lb, original_nolb)
 
 
 def main():

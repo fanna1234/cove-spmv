@@ -35,11 +35,18 @@ def main(shard_dir, out):
                          "font.family": "STIXGeneral",
                          "mathtext.fontset": "stix"})
     data = {k: {} for k in CODECS}  # codec -> matrix -> (bytes, err)
+    all_keys = set()
     for path in glob.glob(os.path.join(shard_dir, "shard*.csv")):
+        if ".summary." in os.path.basename(path):
+            continue
         with open(path, newline="") as f:
             for row in csv.DictReader(f):
+                key = (row.get("matrix", ""), row.get("matrix_bytes", ""))
+                if key[0] and key[1]:
+                    all_keys.add(key)
                 op = row.get("operator_name")
-                if op not in CODECS or row.get("status") != "ok":
+                if (op not in CODECS or row.get("requested_operator") != op
+                        or row.get("status") != "ok"):
                     continue
                 try:
                     b = float(row["value_bytes_per_nnz"])
@@ -48,7 +55,7 @@ def main(shard_dir, out):
                     continue
                 if b <= 0 or e < 0:
                     continue
-                data[op][row["matrix"]] = (b, max(e, ERR_FLOOR))
+                data[op][key] = (b, max(e, ERR_FLOOR))
 
     # the comparable family is measured on the COMMON success set; partial-
     # coverage codecs (fp16 overflow, bfp4 gate, dict low-cardinality) are
@@ -56,7 +63,7 @@ def main(shard_dir, out):
     # survivorship bias makes fp16 look better than bf16.
     family = ["original_lb", "bf16_lb", "bfp8_lb", "bfp8_outlier_lb"]
     common = set.intersection(*(set(data[f]) for f in family))
-    total = len(set(data["original_lb"]))
+    total = len(all_keys)
 
     fig, ax = plt.subplots(figsize=(3.3, 2.1))
     pts = {}

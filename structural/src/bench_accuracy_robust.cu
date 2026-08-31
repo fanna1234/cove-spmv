@@ -18,7 +18,7 @@
 //
 //  (1) x-ENSEMBLE + L2: an ensemble of N>=16 input vectors x (uniform(-1,1),
 //      N(0,1), the canonical zero-mean x (i%17-8)*0.125 used by the production
-//      check_outlier_globalnorm.cu §12 metric [the "fixed-x" anchor], the legacy
+//      check_outlier_globalnorm.cu metric [the "fixed-x" anchor], the legacy
 //      fixed x 1+(i%7)*0.1, all-ones), deterministically seeded. For each x:
 //      fp64 reference y0 = original(fp64)*x (double accumulate)
 //      and each codec's y_hat (production decode + fp32 accumulate). TWO metrics
@@ -95,7 +95,7 @@ static std::vector<XVector> make_x_ensemble(Index cols) {
         for (std::size_t i = 0; i < n; ++i) v.x[i] = dist(rng);
         ensemble.push_back(std::move(v));
     }
-    // Canonical zero-mean x used by the production §12 global-norm metric
+    // Canonical zero-mean x used by the production global-norm metric
     // (check_outlier_globalnorm.cu): (i%17 - 8) * 0.125, range [-1, 1]. This is
     // the "fixed-x" anchor whose bfp8 numbers match the documented sanity values.
     {
@@ -233,7 +233,7 @@ struct CodecResult {
     double bytes_per_nnz = 0.0;
     MetricAccum acc;
     // Per-input maxrow captured for the report: the canonical "fixed-x" anchor
-    // (production §12 metric x) used for the worst/fixed robustness ratio, plus
+    // (production global-norm metric x) used for the worst/fixed robustness ratio, plus
     // the all-positive legacy and all-ones probes.
     double maxrow_anchor = 0.0;
     double maxrow_legacy = 0.0;

@@ -586,7 +586,7 @@ struct BitBsrSpmvReport {
     bool value_codec_exact = false;
     int value_codec_codebook_size = 0;
     std::size_t value_codec_payload_bytes = 0;
-    // For bfp8_outlier: the §6 "value-only" storage figure (positions assumed to
+    // For bfp8_outlier: value-only storage accounting (positions assumed to
     // come free from the bitmap). Defaults to the full payload for every other
     // codec so the reported value-only bytes match the stored bytes there.
     std::size_t value_codec_value_only_payload_bytes = 0;
@@ -950,8 +950,8 @@ void print_bitbsr_spmv_report(const Options& opts,
               << "\n";
     {
         // value-only figure: equals the full payload for non-outlier codecs;
-        // for bfp8_outlier it drops the explicit row/col side-list bytes (§6
-        // assumes positions come free from the bitmap).
+        // for bfp8_outlier it drops the explicit row/col side-list bytes and
+        // assumes positions come from the bitmap.
         const std::size_t value_only_bytes =
             report.value_codec_value_only_valid
                 ? report.value_codec_value_only_payload_bytes

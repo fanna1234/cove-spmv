@@ -52,7 +52,8 @@ def main():
     names = names[a.shard::a.nshards]
     codecs = [c for c in a.codecs.split(",") if c]
 
-    cols = ["matrix", "codec", "nnz", "joint_ms", "hybrid_fp64_ms",
+    cols = ["matrix_id", "matrix", "matrix_bytes", "codec", "nnz",
+            "joint_ms", "hybrid_fp64_ms",
             "joint_speedup_vs_hybrid", "bytes_per_nnz", "rel_err", "pass_1e-2",
             "joint_value_codec", "status"]
     out = Path(a.out)
@@ -66,7 +67,8 @@ def main():
             base = Path(name).name
             if not m.exists():
                 for c in codecs:
-                    w.writerow({"matrix": base, "codec": c, "status": "missing"})
+                    w.writerow({"matrix_id": name, "matrix": base,
+                                "codec": c, "status": "missing"})
                 f.flush()
                 continue
             for c in codecs:
@@ -83,7 +85,9 @@ def main():
                 except subprocess.TimeoutExpired:
                     d, status = {}, "timeout"
                 w.writerow({
+                    "matrix_id": name,
                     "matrix": base,
+                    "matrix_bytes": m.stat().st_size,
                     "codec": c,
                     "nnz": d.get("nnz", ""),
                     "joint_ms": d.get("joint_min_ms", ""),

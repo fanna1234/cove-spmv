@@ -20,6 +20,6 @@ jobs:
         run: ctest --test-dir structural/build --output-on-failure
       - name: Test Python tooling
         run: |
-          python3 -m pip install 'pytest>=8,<9'
+          python3 -m pip install 'pytest>=8,<9' numpy matplotlib
           python3 -m compileall -q structural/scripts
           python3 -m pytest -q structural/tests
