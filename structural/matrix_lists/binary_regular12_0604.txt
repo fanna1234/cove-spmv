@@ -1,0 +1,12 @@
+mycielskian12.mtx
+mycielskian13.mtx
+mycielskian14.mtx
+mycielskian15.mtx
+mycielskian16.mtx
+bibd_15_7.mtx
+bibd_16_8.mtx
+bibd_17_8.mtx
+bibd_18_9.mtx
+bibd_19_9.mtx
+bibd_20_10.mtx
+bibd_22_8.mtx

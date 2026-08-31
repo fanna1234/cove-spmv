@@ -1,0 +1,15 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+data/
+output/
+structural/build/
+structural/build-*/
+CMakeCache.txt
+CMakeFiles/
+Testing/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile.cmake

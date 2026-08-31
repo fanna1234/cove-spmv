@@ -1,0 +1,13 @@
+matrix,codec,nnz,joint_ms,hybrid_fp64_ms,joint_speedup_vs_hybrid,bytes_per_nnz,rel_err,pass_1e-2,joint_value_codec,status
+F1.mtx,bfp8,26837113,0.16384,0.241664,1.475,1.47805,-1,0,bfp8_blocks+bf16_residual,ok
+F1.mtx,auto,26837113,0.16384,0.241664,1.475,1.47805,-1,0,bfp8_blocks+bf16_residual,ok
+Ga41As41H72.mtx,bfp8,18488476,0.111616,0.16384,1.46789,1.51844,-1,0,bfp8_blocks+bf16_residual,ok
+Ga41As41H72.mtx,auto,18488476,0.111616,0.164864,1.47706,1.51844,-1,0,bfp8_blocks+bf16_residual,ok
+Si41Ge41H72.mtx,bfp8,15011265,0.093184,0.13824,1.48352,1.48735,-1,0,bfp8_blocks+bf16_residual,ok
+Si41Ge41H72.mtx,auto,15011265,0.093184,0.137216,1.47253,1.48735,-1,0,bfp8_blocks+bf16_residual,ok
+cant.mtx,bfp8,4007383,0.023552,0.041984,1.78261,1.21954,-1,0,bfp8_blocks+bf16_residual,ok
+cant.mtx,auto,4007383,0.0256,0.041984,1.64,1.00021,-1,0,dict_u8_lossless,ok
+consph.mtx,bfp8,6010480,0.03072,0.055296,1.8,1.22494,-1,0,bfp8_blocks+bf16_residual,ok
+consph.mtx,auto,6010480,0.029696,0.055296,1.86207,1.22494,-1,0,bfp8_blocks+bf16_residual,ok
+pdb1HYS.mtx,bfp8,4344765,0.024576,0.047104,1.91667,1.16807,-1,0,bfp8_blocks+bf16_residual,ok
+pdb1HYS.mtx,auto,4344765,0.024576,0.047104,1.91667,1.16807,-1,0,bfp8_blocks+bf16_residual,ok

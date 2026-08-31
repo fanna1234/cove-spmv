@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use COVE, please cite the software and the ICCD 2026 paper."
+title: "COVE: Co-Designing Position Indexing and Error-Bounded Value Compression for High-Performance SpMV on GPUs"
+type: software
+version: 1.0.0
+date-released: 2026-08-31
+license: MIT
+repository-code: "https://github.com/fanna1234/cove-spmv"
+authors:
+  - family-names: Jia
+    given-names: Kaifan
+    affiliation: "Institute of Software, Chinese Academy of Sciences"
+  - family-names: Jiang
+    given-names: Yongchun
+    affiliation: "Institute of Software, Chinese Academy of Sciences"
+  - family-names: Zhang
+    given-names: Minghui
+    affiliation: "Institute of Software, Chinese Academy of Sciences"
+  - family-names: Ling
+    given-names: Zhihao
+    affiliation: "Institute of Software, Chinese Academy of Sciences"
+  - family-names: Wang
+    given-names: Xuran
+    affiliation: "Institute of Software, Chinese Academy of Sciences"
+  - family-names: Zhang
+    given-names: Heng
+    affiliation: "Institute of Software, Chinese Academy of Sciences"
